@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: helix-robot-fleet-simulator
+    env: node
+    plan: free
+    rootDir: helix-amr-control-main/robot-simulator
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MQTT_HOST
+        value: wss://d0198e38be3049bd878bc42799f52885.s1.eu.hivemq.cloud:8884/mqtt
+      - key: MQTT_USER
+        value: hivemq.webclient.1773177445105
+      - key: MQTT_PASS
+        value: 15apW02MK,%A*gOdy;Tw

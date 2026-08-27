@@ -1,0 +1,14 @@
+{
+  "name": "robot-simulator",
+  "version": "1.0.0",
+  "description": "Mock ROS WebSocket Server for Helix AMR Control",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0",
+    "mqtt": "^5.3.5",
+    "ws": "^8.16.0"
+  }
+}

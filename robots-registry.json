@@ -1,0 +1,86 @@
+[
+  {
+    "id": "model01",
+    "name": "Sadeem Model 01",
+    "model": "Sadeem AMR-V2",
+    "status": "online",
+    "battery": 85.6,
+    "currentLocation": "Charging Dock",
+    "currentGoal": "Idle",
+    "currentTask": null,
+    "assignedOrgId": "org_hilton_01",
+    "ip": "127.0.0.1",
+    "wsUrl": "ws://localhost:9090",
+    "pose": {
+      "x": 19.9,
+      "y": 6.2,
+      "theta": -0.7746458896063507
+    },
+    "lastSeen": "2026-08-27T06:02:25.949Z",
+    "telemetry": {
+      "velocity": {
+        "linear": 0,
+        "angular": 0
+      },
+      "charger": 0,
+      "navStatus": 0,
+      "confidence": 1
+    }
+  },
+  {
+    "id": "model02",
+    "name": "Sadeem model02",
+    "model": "Sadeem AMR-V2",
+    "status": "online",
+    "battery": 85.8,
+    "currentLocation": "Gate 2",
+    "currentGoal": "Idle",
+    "currentTask": null,
+    "assignedOrgId": "org_hilton_01",
+    "ip": "127.0.0.1",
+    "wsUrl": "ws://localhost:9090",
+    "pose": {
+      "x": 16.3,
+      "y": 33.7,
+      "theta": 1.5707963267948966
+    },
+    "lastSeen": "2026-08-27T03:06:47.948Z",
+    "telemetry": {
+      "velocity": {
+        "linear": 0,
+        "angular": 0
+      },
+      "charger": 0,
+      "navStatus": 0,
+      "confidence": 1
+    }
+  },
+  {
+    "id": "model03",
+    "name": "Sadeem model03",
+    "model": "Sadeem AMR-V2",
+    "status": "online",
+    "battery": 85,
+    "currentLocation": "Reception",
+    "currentGoal": "Idle",
+    "currentTask": null,
+    "assignedOrgId": "org_hilton_01",
+    "ip": "127.0.0.1",
+    "wsUrl": "ws://localhost:9090",
+    "pose": {
+      "x": 10.9,
+      "y": 10.6,
+      "theta": -3.0951145222387897
+    },
+    "lastSeen": "2026-08-27T04:06:54.532Z",
+    "telemetry": {
+      "velocity": {
+        "linear": 0,
+        "angular": 0
+      },
+      "charger": 0,
+      "navStatus": 0,
+      "confidence": 1
+    }
+  }
+]
