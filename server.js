@@ -514,6 +514,10 @@ let currentDashboardRobotId = 'model02';
 function getOrCreateRobotInstance(robotId) {
   if (!robotId) robotId = 'model02';
   const cleanId = robotId.trim();
+  // HARDWARE GUARD: model01 is real hardware AMR and must NEVER be simulated
+  if (cleanId === 'model01') {
+    return null;
+  }
   if (!robotInstances.has(cleanId)) {
     const robots = loadRobots();
     const existing = robots.find(r => r.id === cleanId);
@@ -523,10 +527,11 @@ function getOrCreateRobotInstance(robotId) {
   return robotInstances.get(cleanId);
 }
 
-// Initialize standard fleet from file / defaults
+// Initialize standard fleet from file / defaults (excluding model01 hardware)
 const initialRobots = loadRobots();
 if (initialRobots.length > 0) {
   initialRobots.forEach((r, idx) => {
+    if (r.id === 'model01') return; // Skip hardware AMR
     if (!r.pose) r.pose = getDefaultPoseForRobot(r.id, idx);
     robotInstances.set(r.id, new RobotSimInstance(r.id, r));
   });
@@ -599,10 +604,10 @@ function buildLiveRobotStatus(robotId = 'model02') {
 const app = express();
 
 const MAIN_PORT = 3000;
-const ROBOT_PORTS = [3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010];
+const ROBOT_PORTS = [3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010];
 
+// Note: model01 is reserved strictly for real AMR hardware (Muscat Mall). Simulator defaults to model02, model03, etc.
 const PORT_DEFAULT_ROBOTS = {
-  3001: 'model01',
   3002: 'model02',
   3003: 'model03',
   3004: 'model04',
@@ -1530,6 +1535,7 @@ function initHeadlessMqttFleet() {
   }
 
   function publishRobotStatus(inst) {
+    if (!inst || inst.id === 'model01') return; // model01 is hardware-only
     const statusObj = buildLiveRobotStatus(inst.id);
     const currLoc = inst.last_poi || statusObj.nearest_location || 'Charging Dock';
     const hb = {
