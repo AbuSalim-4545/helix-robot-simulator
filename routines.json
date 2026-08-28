@@ -1,0 +1,116 @@
+[
+  {
+    "description": "Greets guests at Main Entrance and guides them to Executive Suite",
+    "robotId": "model03",
+    "createdAt": "2026-08-26T04:12:42.135Z",
+    "updatedAt": "2026-08-26T04:20:48.114Z",
+    "name": "VIP Welcome Escort",
+    "steps": [
+      {
+        "target": "Main Entrance",
+        "type": "navigate",
+        "id": "s1"
+      },
+      {
+        "language": "en",
+        "type": "speak",
+        "id": "s2",
+        "text": "Welcome to Sadeem. Please follow me to the Executive Suite."
+      },
+      {
+        "id": "s3",
+        "type": "navigate",
+        "target": "Executive Suite"
+      },
+      {
+        "type": "speak",
+        "id": "s4",
+        "language": "en",
+        "text": "We have arrived at the Executive Suite. Have a great meeting."
+      }
+    ],
+    "id": "routine_1700000000001"
+  },
+  {
+    "updatedAt": "2026-08-26T04:20:48.115Z",
+    "description": "جولة تعريفية بسيطة تبدأ من الاستقبال، البهو، ثم البوابة 1",
+    "createdAt": "2026-08-23T22:42:27.578Z",
+    "id": "routine_1787524947578",
+    "robotId": "model03",
+    "steps": [
+      {
+        "title": "",
+        "language": "en",
+        "seconds": 5,
+        "id": "s1_1787524947578",
+        "text": "",
+        "duration": 5,
+        "action": "navigate",
+        "html": "",
+        "target": "Reception",
+        "type": "navigate"
+      },
+      {
+        "type": "speak",
+        "html": "",
+        "duration": 5,
+        "text": "أهلاً بكم في منطقة الاستقبال، يسعدنا وجودكم هنا.",
+        "language": "ar",
+        "target": "جولة تعريفية بالمقر",
+        "title": "",
+        "action": "estop",
+        "id": "s2_1787524947578",
+        "seconds": 5
+      },
+      {
+        "seconds": 5,
+        "duration": 5,
+        "title": "",
+        "target": "Lobby",
+        "type": "navigate",
+        "html": "",
+        "action": "navigate",
+        "text": "",
+        "language": "en",
+        "id": "s3_1787524947578"
+      },
+      {
+        "seconds": 5,
+        "target": "جولة تعريفية بالمقر",
+        "language": "ar",
+        "action": "estop",
+        "duration": 5,
+        "text": "نحن الآن في بهو المبنى، منطقة مريحة للانتظار والاستراحة.",
+        "title": "",
+        "type": "speak",
+        "id": "s4_1787524947578",
+        "html": ""
+      },
+      {
+        "duration": 5,
+        "target": "Gate 1",
+        "seconds": 5,
+        "id": "s5_1787524947578",
+        "action": "navigate",
+        "html": "",
+        "title": "",
+        "language": "en",
+        "type": "navigate",
+        "text": ""
+      },
+      {
+        "type": "speak",
+        "html": "",
+        "duration": 5,
+        "text": "وصلنا أخيراً إلى البوابة رقم 1. شكراً لمرافقتنا في هذه الجولة.",
+        "id": "s6_1787524947578",
+        "target": "جولة تعريفية بالمقر",
+        "title": "",
+        "action": "estop",
+        "seconds": 5,
+        "language": "ar"
+      }
+    ],
+    "name": "جولة تعريفية بالمقر"
+  }
+]

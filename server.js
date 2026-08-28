@@ -509,10 +509,10 @@ class RobotSimInstance {
 // Robot Simulation Registry & Map
 // ─────────────────────────────────────────────────────────────────────────────
 const robotInstances = new Map();
-let currentDashboardRobotId = 'model01';
+let currentDashboardRobotId = 'model02';
 
 function getOrCreateRobotInstance(robotId) {
-  if (!robotId) robotId = 'model01';
+  if (!robotId) robotId = 'model02';
   const cleanId = robotId.trim();
   if (!robotInstances.has(cleanId)) {
     const robots = loadRobots();
@@ -531,12 +531,12 @@ if (initialRobots.length > 0) {
     robotInstances.set(r.id, new RobotSimInstance(r.id, r));
   });
 } else {
-  ['model01', 'model02', 'model03'].forEach((id, idx) => {
+  ['model02', 'model03'].forEach((id, idx) => {
     robotInstances.set(id, new RobotSimInstance(id, { pose: getDefaultPoseForRobot(id, idx) }));
   });
 }
 
-function buildLiveRobotStatus(robotId = 'model01') {
+function buildLiveRobotStatus(robotId = 'model02') {
   const inst = getOrCreateRobotInstance(robotId);
   const robots = loadRobots();
   let robot = robots.find(r => r.id === robotId) || { id: robotId, name: `Sadeem ${robotId.toUpperCase()}`, model: 'Sadeem AMR-V2' };
@@ -644,7 +644,7 @@ app.use((req, res, next) => {
     return res.json({
       service: 'Helix AMR Headless Fleet Backend',
       status: 'ONLINE',
-      activeRobots: ['model01', 'model02', 'model03'],
+      activeRobots: ['model02', 'model03'],
       mqtt: headlessMqttClient?.connected ? 'CONNECTED' : 'CONNECTING',
       uptime: Math.round(process.uptime()) + 's'
     });
@@ -705,7 +705,7 @@ app.post('/api/map-config', (req, res) => {
 // Navigation REST API
 app.post('/api/navigate', (req, res) => {
   const target = req.body?.target || req.body?.poi || req.body?.waypoint;
-  const robotId = req.body?.robotId || req.body?.id || 'model01';
+  const robotId = req.body?.robotId || req.body?.id || 'model02';
   if (!target) return res.status(400).json({ error: 'No target specified' });
   
   const inst = getOrCreateRobotInstance(robotId);
@@ -716,7 +716,7 @@ app.post('/api/navigate', (req, res) => {
 
 // Live Status REST API
 app.get(['/api/robot-status', '/api/robots/status', '/api/robots/:id/status'], (req, res) => {
-  const robotId = req.params.id || req.query.id || req.query.robot_id || 'model01';
+  const robotId = req.params.id || req.query.id || req.query.robot_id || 'model02';
   const statusObj = buildLiveRobotStatus(robotId);
   res.json(statusObj);
 });
@@ -1107,7 +1107,7 @@ app.get('/robot-ui/*.html', (req, res, next) => {
     let html = fs.readFileSync(filePath, 'utf8');
     const host = req.headers.host ? req.headers.host.split(':')[0] : 'localhost';
     const httpPort = req.socket?.localPort || 3000;
-    const defaultRobotId = (req.query.id || req.query.robot_id || PORT_DEFAULT_ROBOTS[httpPort] || 'model01').toString().trim();
+    const defaultRobotId = (req.query.id || req.query.robot_id || PORT_DEFAULT_ROBOTS[httpPort] || 'model02').toString().trim();
     const rosPort = getRosPortForRobot(defaultRobotId);
 
     const injectScript = `<script>
@@ -1146,7 +1146,7 @@ dashWss.on('connection', (ws) => {
     try {
       const data = JSON.parse(msg);
       if (data.type === 'select_robot') {
-        currentDashboardRobotId = data.robotId || 'model01';
+        currentDashboardRobotId = data.robotId || 'model02';
         broadcastDashState();
       } else if (data.type === 'update_state') {
         const targetId = data.robotId || currentDashboardRobotId;
@@ -1196,8 +1196,8 @@ function getDashStatePayload() {
     connectedClients: inst.wsClients.size
   }));
 
-  const activeInst = robotInstances.get(currentDashboardRobotId) || robotInstances.get('model01') || {
-    id: 'model01', battery: 85, charger: 0, robotPose: { x: 19.9, y: 6.2, theta: 0 }, isMoving: false, speedScale: 15
+  const activeInst = robotInstances.get(currentDashboardRobotId) || robotInstances.get('model02') || {
+    id: 'model02', battery: 85, charger: 0, robotPose: { x: 18.0, y: 6.2, theta: 0 }, isMoving: false, speedScale: 15
   };
 
   return JSON.stringify({
@@ -1242,7 +1242,7 @@ function logDashboard(message, direction = 'local') {
 // ─────────────────────────────────────────────────────────────────────────────
 // Per-Robot ROSBridge WebSocket Connection Handler
 // ─────────────────────────────────────────────────────────────────────────────
-function handleRosClientConnection(ws, robotId = 'model01') {
+function handleRosClientConnection(ws, robotId = 'model02') {
   const inst = getOrCreateRobotInstance(robotId);
   inst.wsClients.add(ws);
   logDashboard(`[WS] Robot "${robotId}" connected to mock ROSBridge (Clients: ${inst.wsClients.size})`, 'client');
@@ -1417,7 +1417,7 @@ rosServer9090.on('upgrade', (request, socket, head) => {
         botId = parts[0];
       }
     }
-    botId = botId || 'model01';
+    botId = botId || 'model02';
     const wss = getOrCreateRosWssForRobot(botId);
     wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
   } catch (e) {
@@ -1502,7 +1502,7 @@ function initHeadlessMqttFleet() {
   const MQTT_USER = process.env.MQTT_USER || 'hivemq.webclient.1773177445105';
   const MQTT_PASS = process.env.MQTT_PASS || '15apW02MK,%A*gOdy;Tw';
 
-  console.log('[HEADLESS FLEET] Initializing 24/7 MQTT connection for fleet (model01, model02, model03)...');
+  console.log('[HEADLESS FLEET] Initializing 24/7 MQTT connection for fleet (model02, model03)...');
 
   try {
     headlessMqttClient = mqtt.connect(MQTT_HOST, {
@@ -1710,7 +1710,7 @@ function initHeadlessMqttFleet() {
           targetRobotId = parts[1];
         }
       }
-      if (!targetRobotId) targetRobotId = 'model01';
+      if (!targetRobotId) targetRobotId = 'model02';
 
       const inst = getOrCreateRobotInstance(targetRobotId);
 

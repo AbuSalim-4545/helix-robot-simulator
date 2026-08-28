@@ -1,0 +1,22 @@
+{
+  "description": "Delivery contacts database — maps person/office names to map markers (POI) and email addresses. Both robot-ui.html and InteractiveAI.tsx look up contacts here to resolve navigation targets and send emails.",
+  "contacts": [
+    {
+      "id": "contact_1",
+      "person_name": "Ahmed Salim",
+      "office": "Ahmed office",
+      "marker_name": "Reception",
+      "email": "abdo.3.5.2002@gmail.com",
+      "aliases": [
+        "Ahmed office",
+        "Ahmed Salim office",
+        "Ahmed's office",
+        "ahmed office",
+        "ahmend office",
+        "Mr. Ahmed office",
+        "Ahmed Salim",
+        "ahmed salim"
+      ]
+    }
+  ]
+}

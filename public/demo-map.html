@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SADEEM MODEL 01 — Live Demo Map View</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    canvas { touch-action: none; user-select: none; }
+    .hud-card {
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(51, 65, 85, 0.85);
+      backdrop-filter: blur(12px);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col overflow-hidden">
+
+  <!-- Header -->
+  <header class="bg-slate-900/95 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 z-30 backdrop-blur-md">
+    <div class="flex items-center gap-3">
+      <div class="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">
+        <i data-lucide="navigation-2" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-extrabold text-lg text-white leading-tight font-display tracking-wide">SADEEM MODEL 01</h1>
+          <span class="px-2 py-0.5 text-[10px] font-bold bg-cyan-950 text-cyan-400 border border-cyan-800/80 rounded-full tracking-wider uppercase">Live Demo Map</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Header Controls -->
+    <div class="flex items-center gap-4">
+      <!-- Status Badge -->
+      <div class="hidden sm:flex items-center gap-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-lg text-xs">
+        <div id="connDot" class="w-2 h-2 rounded-full bg-slate-400 animate-pulse"></div>
+        <span id="connLabel" class="text-slate-300 font-medium">Connecting...</span>
+      </div>
+
+      <!-- Active Goal Status -->
+      <div class="hidden md:flex items-center gap-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-mono">
+        <span class="text-slate-400">Target:</span>
+        <span id="goalText" class="text-cyan-400 font-bold">Idle</span>
+      </div>
+
+      <!-- Navigation Links -->
+      <div class="flex items-center gap-2">
+        <a href="/" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+        </a>
+        <a href="/setup" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5">
+          <i data-lucide="settings" class="w-4 h-4"></i> Setup
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Canvas Container -->
+  <div class="flex flex-1 relative bg-slate-950 overflow-hidden min-h-0" id="canvas-container">
+
+    <!-- Reset Zoom Button -->
+    <button onclick="resetZoom()" class="absolute bottom-4 right-4 z-20 hud-card text-slate-300 hover:text-white text-xs px-3.5 py-2 rounded-xl backdrop-blur-md flex items-center gap-1.5 shadow-xl transition-all active:scale-95">
+      <i data-lucide="maximize-2" class="w-4 h-4 text-cyan-400"></i> Reset View
+    </button>
+
+    <!-- Map Canvas -->
+    <canvas id="mapCanvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+  </div>
+
+  <script>
+    let mapImage = new Image();
+    let robotImage = new Image();
+    let mapLoaded = false;
+    let robotImageLoaded = false;
+
+    // Start server position default at Charging Dock (19.9, 6.2)
+    let dashState = {
+      battery: 85,
+      robotPose: { x: 19.9, y: 6.2, theta: 0 },
+      isMoving: false,
+      navStatus: 0,
+      currentGoal: '',
+      speedScale: 15,
+      remainingWaypoints: []
+    };
+
+    let config = {
+      resolution: 0.05,
+      origin: { x: -10.0, y: -10.0 },
+      markers: []
+    };
+
+    let cameraOffset = { x: 50, y: 50 };
+    let cameraZoom = 1.0;
+    let isDraggingCanvas = false;
+    let dragStart = { x: 0, y: 0 };
+    let dashOffset = 0;
+
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Load Robot Avatar Image (c:\Users\sam\Desktop\helix-amr-control-main\helix-amr-control-main\robot-simulator\robot_image.png)
+    robotImage.onload = () => { robotImageLoaded = true; render(); };
+    robotImage.onerror = () => { console.warn('Could not load /robot_image.png'); };
+    robotImage.src = '/robot_image.png';
+
+    // ── Init & Map Config ───────────────────────────────────────────────────
+    async function init() {
+      try {
+        const res = await fetch('/api/map-config');
+        if (res.ok) {
+          config = await res.json();
+        }
+      } catch (e) {
+        console.warn('Could not fetch map config:', e);
+      }
+
+      mapImage.onload = () => {
+        mapLoaded = true;
+        resizeCanvas();
+        resetZoom();
+        requestAnimationFrame(renderLoop);
+      };
+      mapImage.src = '/map-image.jpeg';
+
+      setupCanvasEvents();
+      connectWS();
+      lucide.createIcons();
+    }
+
+    function resizeCanvas() {
+      const container = document.getElementById('canvas-container');
+      const rect = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      canvas._cssWidth = rect.width;
+      canvas._cssHeight = rect.height;
+    }
+    window.addEventListener('resize', () => { resizeCanvas(); render(); });
+
+    function resetZoom() {
+      if (!mapLoaded) return;
+      const container = document.getElementById('canvas-container');
+      const scaleX = (container.clientWidth - 80) / mapImage.width;
+      const scaleY = (container.clientHeight - 80) / mapImage.height;
+      cameraZoom = Math.min(scaleX, scaleY, 2.5);
+      cameraOffset.x = (container.clientWidth - mapImage.width * cameraZoom) / 2;
+      cameraOffset.y = (container.clientHeight - mapImage.height * cameraZoom) / 2;
+      render();
+    }
+
+    // ── World to Canvas Projection ──────────────────────────────────────────
+    function worldToScreen(wx, wy) {
+      if (!mapLoaded) return { x: 0, y: 0 };
+      const px = (wx - config.origin.x) / config.resolution;
+      const py = mapImage.height - (wy - config.origin.y) / config.resolution;
+      return {
+        x: px * cameraZoom + cameraOffset.x,
+        y: py * cameraZoom + cameraOffset.y
+      };
+    }
+
+    // ── Main Render Loop ────────────────────────────────────────────────────
+    function renderLoop() {
+      dashOffset -= 0.5; // Smooth animated pathway dots
+      render();
+      requestAnimationFrame(renderLoop);
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Render Map JPEG Image (Vertically Flipped)
+      if (mapLoaded) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.translate(cameraOffset.x, cameraOffset.y + mapImage.height * cameraZoom);
+        ctx.scale(1, -1);
+        ctx.drawImage(mapImage, 0, 0, mapImage.width * cameraZoom, mapImage.height * cameraZoom);
+        ctx.restore();
+      }
+
+      // ── DYNAMIC PATHWAY (Shows ONLY when moving, connects ALL remaining waypoints) ──
+      const targetMarker = (dashState.currentGoal && config.markers) 
+        ? config.markers.find(m => m.name === dashState.currentGoal) 
+        : null;
+
+      if (dashState.isMoving && dashState.robotPose && targetMarker) {
+        // Build sequence of remaining points: robotPose -> remaining waypoints -> target
+        const routePoints = [worldToScreen(dashState.robotPose.x, dashState.robotPose.y)];
+
+        if (Array.isArray(dashState.remainingWaypoints) && dashState.remainingWaypoints.length > 0) {
+          dashState.remainingWaypoints.forEach(w => {
+            routePoints.push(worldToScreen(w.x, w.y));
+          });
+        } else {
+          routePoints.push(worldToScreen(targetMarker.pose.position.x, targetMarker.pose.position.y));
+        }
+
+        if (routePoints.length >= 2) {
+          // Path Glow Underlayer
+          ctx.beginPath();
+          ctx.moveTo(routePoints[0].x, routePoints[0].y);
+          for (let i = 1; i < routePoints.length; i++) {
+            ctx.lineTo(routePoints[i].x, routePoints[i].y);
+          }
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.3)';
+          ctx.lineWidth = 12 * cameraZoom;
+          ctx.stroke();
+
+          // Animated Dotted Path Line (Disappears behind robot as robotPose updates)
+          ctx.beginPath();
+          ctx.moveTo(routePoints[0].x, routePoints[0].y);
+          for (let i = 1; i < routePoints.length; i++) {
+            ctx.lineTo(routePoints[i].x, routePoints[i].y);
+          }
+          ctx.strokeStyle = '#06b6d4';
+          ctx.lineWidth = 4 * cameraZoom;
+          ctx.setLineDash([10 * cameraZoom, 6 * cameraZoom]);
+          ctx.lineDashOffset = dashOffset;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Target Waypoint Beacon Ring
+        const targetPos = worldToScreen(targetMarker.pose.position.x, targetMarker.pose.position.y);
+        ctx.beginPath();
+        ctx.arc(targetPos.x, targetPos.y, (18 + Math.sin(Date.now() / 200) * 4) * cameraZoom, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.85)';
+        ctx.lineWidth = 2.5 * cameraZoom;
+        ctx.stroke();
+      }
+
+      // ── DRAW PROMINENT HIGH-CONTRAST WAYPOINT MARKERS & LABELS ──────────────
+      (config.markers || []).forEach(m => {
+        const s = worldToScreen(m.pose.position.x, m.pose.position.y);
+        const isTarget = dashState.currentGoal === m.name;
+        const isDock = m.behavior_code === 11 || m.name.toLowerCase().includes('dock');
+
+        // Outer glow ring
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, (isTarget ? 18 : 13) * Math.max(0.7, cameraZoom * 0.8), 0, Math.PI * 2);
+        ctx.fillStyle = isTarget ? 'rgba(6, 182, 212, 0.45)' : (isDock ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.3)');
+        ctx.fill();
+
+        // Core marker circle
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, (isTarget ? 9 : 7) * Math.max(0.7, cameraZoom * 0.8), 0, Math.PI * 2);
+        ctx.fillStyle = isTarget ? '#06b6d4' : (isDock ? '#f59e0b' : '#10b981');
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // High-Contrast Pill Container for Waypoint Name Label
+        // (Ensures 100% legibility over white map floors and dark walls)
+        const labelText = m.name;
+        const fontSize = Math.max(11, Math.round(12 * cameraZoom));
+        ctx.font = `700 ${fontSize}px sans-serif`;
+        const textMetrics = ctx.measureText(labelText);
+        const textWidth = textMetrics.width;
+        const padX = 8, padY = 4;
+        const rectW = textWidth + padX * 2;
+        const rectH = fontSize + padY * 2;
+        const rectX = s.x + 12;
+        const rectY = s.y - rectH / 2;
+
+        // Dark Pill Background Box
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(rectX, rectY, rectW, rectH, 6);
+        ctx.fill();
+        ctx.strokeStyle = isTarget ? 'rgba(56, 189, 248, 0.7)' : 'rgba(51, 65, 85, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Label Text inside Pill
+        ctx.fillStyle = isTarget ? '#38bdf8' : '#f8fafc';
+        ctx.fillText(labelText, rectX + padX, rectY + rectH - padY - 2);
+      });
+
+      // ── DRAW ROBOT AVATAR IMAGE (2x Larger, 9:16 Aspect Ratio, Fixed Upright Orientation) ──
+      if (dashState.robotPose) {
+        const rScreen = worldToScreen(dashState.robotPose.x, dashState.robotPose.y);
+        
+        ctx.save();
+        ctx.translate(rScreen.x, rScreen.y);
+
+        // Robot Pulse Ring
+        ctx.beginPath();
+        ctx.arc(0, 0, (28 + (dashState.isMoving ? Math.sin(Date.now() / 150) * 4 : 0)) * cameraZoom, 0, Math.PI * 2);
+        ctx.fillStyle = dashState.isMoving ? 'rgba(6, 182, 212, 0.25)' : 'rgba(16, 185, 129, 0.2)';
+        ctx.fill();
+
+        // 2x Larger Robot Avatar in 9:16 Aspect Ratio with FIXED Upright Orientation (NO rotation)
+        const imgW = 76 * Math.max(0.7, cameraZoom * 0.9); // 2x larger width
+        const imgH = imgW * (16 / 9);                      // Strict 9:16 aspect ratio
+
+        if (robotImageLoaded) {
+          // Draw robot_image.png upright centered at (0, 0)
+          ctx.drawImage(robotImage, -imgW / 2, -imgH / 2, imgW, imgH);
+        } else {
+          // Fallback circular robot marker if image not loaded yet
+          ctx.beginPath();
+          ctx.arc(0, 0, 20 * cameraZoom, 0, Math.PI * 2);
+          ctx.fillStyle = '#0284c7';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // ── Canvas Interaction (Pan & Zoom) ────────────────────────────────────
+    function setupCanvasEvents() {
+      canvas.addEventListener('mousedown', e => {
+        isDraggingCanvas = true;
+        dragStart = { x: e.clientX - cameraOffset.x, y: e.clientY - cameraOffset.y };
+      });
+      window.addEventListener('mousemove', e => {
+        if (isDraggingCanvas) {
+          cameraOffset.x = e.clientX - dragStart.x;
+          cameraOffset.y = e.clientY - dragStart.y;
+          render();
+        }
+      });
+      window.addEventListener('mouseup', () => { isDraggingCanvas = false; });
+
+      canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const newZoom = Math.max(0.4, Math.min(5.0, cameraZoom * zoomFactor));
+        cameraOffset.x = mouseX - (mouseX - cameraOffset.x) * (newZoom / cameraZoom);
+        cameraOffset.y = mouseY - (mouseY - cameraOffset.y) * (newZoom / cameraZoom);
+        cameraZoom = newZoom;
+        render();
+      }, { passive: false });
+    }
+
+    // ── WebSocket Connection to /dash ───────────────────────────────────────
+    let ws;
+    function connectWS() {
+      const loc = window.location;
+      ws = new WebSocket(`ws://${loc.host}/dash`);
+
+      ws.onopen = () => {
+        document.getElementById('connDot').className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50';
+        document.getElementById('connLabel').textContent = 'Live System Connected';
+      };
+
+      ws.onclose = () => {
+        document.getElementById('connDot').className = 'w-2 h-2 rounded-full bg-red-500 animate-pulse';
+        document.getElementById('connLabel').textContent = 'Disconnected (Reconnecting...)';
+        setTimeout(connectWS, 2000);
+      };
+
+      ws.onmessage = e => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'state') {
+            dashState = msg.state;
+            syncHUD();
+            render();
+          }
+        } catch (err) { console.error('WS parse error:', err); }
+      };
+    }
+
+    function syncHUD() {
+      const goal = dashState.currentGoal || 'Idle';
+      const goalEl = document.getElementById('goalText');
+      if (goalEl) goalEl.textContent = goal;
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
