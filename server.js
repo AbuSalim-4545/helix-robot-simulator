@@ -1534,6 +1534,27 @@ function initHeadlessMqttFleet() {
     }
   }
 
+  function publishChunkedMqtt(topic, payloadObj, opts = { qos: 0 }) {
+    const dataStr = typeof payloadObj === 'string' ? payloadObj : JSON.stringify(payloadObj);
+    const CHUNK_SIZE = 64 * 1024;
+    if (dataStr.length > CHUNK_SIZE) {
+      const messageId = 'chk_' + Math.random().toString(36).substring(2, 9);
+      const totalChunks = Math.ceil(dataStr.length / CHUNK_SIZE);
+      for (let i = 0; i < totalChunks; i++) {
+        safePublish(topic, {
+          _isChunked: true,
+          _msgId: messageId,
+          _chunkIndex: i,
+          _totalChunks: totalChunks,
+          _senderId: 'headless_fleet_srv',
+          data: dataStr.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
+        }, opts);
+      }
+    } else {
+      safePublish(topic, payloadObj, opts);
+    }
+  }
+
   function publishRobotStatus(inst) {
     if (!inst || inst.id === 'model01') return; // model01 is hardware-only
     const statusObj = buildLiveRobotStatus(inst.id);
@@ -1815,12 +1836,45 @@ function initHeadlessMqttFleet() {
         return;
       }
 
-      // ── ROSBridge Service Requests over MQTT ──
+      // ── ROSBridge Service & Topic Requests over MQTT ──
       if (topic.includes('/bridge/request')) {
-        if (p.op === 'call_service') {
+        if (p.op === 'subscribe') {
+          if (p.topic === '/map' || topic.endsWith('/map')) {
+            const b64 = getMapBase64();
+            const mapMsg = {
+              op: 'publish',
+              topic: '/map',
+              msg: {
+                data: b64,
+                info: {
+                  width: 1024,
+                  height: 1024,
+                  resolution: mapConfig.resolution || 0.05,
+                  origin: {
+                    position: {
+                      x: mapConfig.origin?.x ?? -10.0,
+                      y: mapConfig.origin?.y ?? -10.0,
+                      z: 0
+                    }
+                  }
+                }
+              },
+              robotId: inst.id,
+              robot_id: inst.id,
+              _senderRobotId: inst.id,
+              _senderId: 'headless_fleet_srv',
+              _ts: Date.now()
+            };
+            publishChunkedMqtt(`robot/${inst.id}/bridge/response`, mapMsg);
+            if (p._senderId) {
+              publishChunkedMqtt(`robot/${inst.id}/bridge/res/${p._senderId}`, mapMsg);
+            }
+          }
+        }
+        else if (p.op === 'call_service') {
           if (p.service === '/get_robot_status' || p.service === '/status' || p.service === '/request_robot_status') {
             const liveStatus = buildLiveRobotStatus(inst.id);
-            safePublish(`robot/${inst.id}/bridge/response`, {
+            const statusRes = {
               op: 'service_response',
               id: p.id,
               service: p.service,
@@ -1828,7 +1882,9 @@ function initHeadlessMqttFleet() {
               result: true,
               _senderId: 'headless_fleet_srv',
               _ts: Date.now()
-            });
+            };
+            safePublish(`robot/${inst.id}/bridge/response`, statusRes);
+            if (p._senderId) safePublish(`robot/${inst.id}/bridge/res/${p._senderId}`, statusRes);
             publishRobotStatus(inst);
           } else if (p.service === '/marker_operation/get_markers') {
             const allWps = (mapConfig.markers || []).map(m => ({
@@ -1836,7 +1892,7 @@ function initHeadlessMqttFleet() {
               behavior_code: m.behavior_code ?? 0,
               pose: m.pose || { position: { x: m.x ?? 0, y: m.y ?? 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }
             }));
-            safePublish(`robot/${inst.id}/bridge/response`, {
+            const markersRes = {
               op: 'service_response',
               id: p.id,
               service: '/marker_operation/get_markers',
@@ -1844,11 +1900,97 @@ function initHeadlessMqttFleet() {
               result: true,
               _senderId: 'headless_fleet_srv',
               _ts: Date.now()
-            });
+            };
+            safePublish(`robot/${inst.id}/bridge/response`, markersRes);
+            if (p._senderId) safePublish(`robot/${inst.id}/bridge/res/${p._senderId}`, markersRes);
+          } else if (p.service === '/static_map' || p.service === 'static_map' || p.service === '/get_map' || p.service === 'get_map') {
+            const b64 = getMapBase64();
+            const mapRes = {
+              op: 'service_response',
+              id: p.id,
+              service: p.service,
+              values: {
+                map: {
+                  data: b64,
+                  info: {
+                    width: 1024,
+                    height: 1024,
+                    resolution: mapConfig.resolution || 0.05,
+                    origin: {
+                      position: {
+                        x: mapConfig.origin?.x ?? -10.0,
+                        y: mapConfig.origin?.y ?? -10.0,
+                        z: 0
+                      }
+                    }
+                  }
+                }
+              },
+              result: true,
+              robotId: inst.id,
+              _senderRobotId: inst.id,
+              _senderId: 'headless_fleet_srv',
+              _ts: Date.now()
+            };
+            publishChunkedMqtt(`robot/${inst.id}/bridge/response`, mapRes);
+            if (p._senderId) publishChunkedMqtt(`robot/${inst.id}/bridge/res/${p._senderId}`, mapRes);
+          } else if (p.service === '/node_manager_control' || p.service === '/map_manager/load') {
+            const b64 = getMapBase64();
+            const loadRes = {
+              op: 'service_response',
+              id: p.id,
+              service: p.service,
+              values: {
+                result: 0,
+                map: {
+                  data: b64,
+                  info: {
+                    width: 1024,
+                    height: 1024,
+                    resolution: mapConfig.resolution || 0.05,
+                    origin: {
+                      position: {
+                        x: mapConfig.origin?.x ?? -10.0,
+                        y: mapConfig.origin?.y ?? -10.0,
+                        z: 0
+                      }
+                    }
+                  }
+                }
+              },
+              result: true,
+              robotId: inst.id,
+              _senderRobotId: inst.id,
+              _senderId: 'headless_fleet_srv',
+              _ts: Date.now()
+            };
+            publishChunkedMqtt(`robot/${inst.id}/bridge/response`, loadRes);
+            if (p._senderId) publishChunkedMqtt(`robot/${inst.id}/bridge/res/${p._senderId}`, loadRes);
+          } else if (p.service === '/virtual_wall_operation/get_walls') {
+            const vwalls = (mapConfig.virtualWalls || []).map(w => ({
+              wall_id: w.name || w.wall_id,
+              start_x: w.start?.x ?? 0,
+              start_y: w.start?.y ?? 0,
+              end_x: w.end?.x ?? 0,
+              end_y: w.end?.y ?? 0
+            }));
+            const wallRes = {
+              op: 'service_response',
+              id: p.id,
+              service: p.service,
+              values: { vwalls: { walls: vwalls }, walls: vwalls },
+              result: true,
+              robotId: inst.id,
+              _senderRobotId: inst.id,
+              _senderId: 'headless_fleet_srv',
+              _ts: Date.now()
+            };
+            safePublish(`robot/${inst.id}/bridge/response`, wallRes);
+            if (p._senderId) safePublish(`robot/${inst.id}/bridge/res/${p._senderId}`, wallRes);
           } else if (p.service === '/poi' && p.args?.poi) {
             console.log(`[HEADLESS FLEET:${targetRobotId}] /poi service requested navigation to "${p.args.poi}"`);
             inst.startNavigationTo(p.args.poi);
-            safePublish(`robot/${inst.id}/bridge/response`, {
+            const poiRes = {
               op: 'service_response',
               id: p.id,
               service: '/poi',
@@ -1856,7 +1998,9 @@ function initHeadlessMqttFleet() {
               result: true,
               _senderId: 'headless_fleet_srv',
               _ts: Date.now()
-            });
+            };
+            safePublish(`robot/${inst.id}/bridge/response`, poiRes);
+            if (p._senderId) safePublish(`robot/${inst.id}/bridge/res/${p._senderId}`, poiRes);
           }
         }
       }
