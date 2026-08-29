@@ -512,19 +512,15 @@ const robotInstances = new Map();
 let currentDashboardRobotId = 'model02';
 
 function getOrCreateRobotInstance(robotId) {
-  if (!robotId) robotId = 'model02';
+  if (!robotId) return null;
   const cleanId = robotId.trim();
   // HARDWARE GUARD: model01 is real hardware AMR and must NEVER be simulated
   if (cleanId === 'model01') {
     return null;
   }
-  if (!robotInstances.has(cleanId)) {
-    const robots = loadRobots();
-    const existing = robots.find(r => r.id === cleanId);
-    const inst = new RobotSimInstance(cleanId, existing || {});
-    robotInstances.set(cleanId, inst);
-  }
-  return robotInstances.get(cleanId);
+  // STRICT GUARD: Only return instances that belong to Render's authorized fleet.
+  // Never dynamically adopt or spawn instances for external/local/hardware robot IDs!
+  return robotInstances.get(cleanId) || null;
 }
 
 // Initialize standard fleet from file / defaults (excluding model01 hardware)
@@ -1692,28 +1688,26 @@ function initHeadlessMqttFleet() {
   });
 
   headlessMqttClient.on('connect', () => {
-    console.log('✅ [HEADLESS FLEET] Connected to HiveMQ Cloud MQTT 24/7. Headless workers active for all robots.');
+    console.log('✅ [HEADLESS FLEET] Connected to HiveMQ Cloud MQTT 24/7. Headless workers active for authorized robots.');
 
-    const topics = [
-      'robot/+/tasks/command',
-      'robot/tasks/command',
-      'robot/+/bridge/request',
-      'robot/bridge/request',
-      'robot/+/bridge/ping/req',
-      'robot/bridge/ping/req',
-      'robot/+/estop/command',
-      'robot/estop/command',
-      'robot/+/speed/command',
-      'robot/speed/command',
-      'robot/+/drive/cmd_vel',
-      'robot/fleet/broadcast'
-    ];
+    // STRICT TOPIC SCOPING: Only subscribe to topics for robots in Render's authorized fleet
+    const topics = [];
+    robotInstances.forEach((_, rId) => {
+      topics.push(`robot/${rId}/tasks/command`);
+      topics.push(`robot/${rId}/bridge/request`);
+      topics.push(`robot/${rId}/bridge/ping/req`);
+      topics.push(`robot/${rId}/estop/command`);
+      topics.push(`robot/${rId}/speed/command`);
+      topics.push(`robot/${rId}/drive/cmd_vel`);
+    });
+    topics.push('robot/fleet/broadcast');
+
     headlessMqttClient.subscribe(topics, { qos: 0 }, (err) => {
       if (err) console.error('[HEADLESS FLEET] Subscribe error:', err.message);
-      else console.log('[HEADLESS FLEET] Subscribed to fleet command topics');
+      else console.log('[HEADLESS FLEET] Subscribed strictly to authorized fleet topics:', topics.length);
     });
 
-    // Initial broadcast of all robot statuses
+    // Initial broadcast of authorized robot statuses
     robotInstances.forEach((inst) => publishRobotStatus(inst));
   });
 
@@ -1733,13 +1727,17 @@ function initHeadlessMqttFleet() {
       let targetRobotId = p.targetRobotId || p.robotId || p.robot_id;
       if (!targetRobotId && topic.includes('/')) {
         const parts = topic.split('/');
-        if (parts.length >= 3 && parts[0] === 'robot' && parts[1].startsWith('model')) {
+        if (parts.length >= 3 && parts[0] === 'robot') {
           targetRobotId = parts[1];
         }
       }
-      if (!targetRobotId) targetRobotId = 'model02';
+      if (!targetRobotId) return;
 
       const inst = getOrCreateRobotInstance(targetRobotId);
+      if (!inst) {
+        // Not a Render-managed robot — strictly ignore!
+        return;
+      }
 
       // ── Diagnostic Ping Request ──
       if (topic === 'robot/bridge/ping/req' || topic === `robot/${targetRobotId}/bridge/ping/req`) {
